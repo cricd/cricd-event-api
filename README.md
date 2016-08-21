@@ -18,5 +18,5 @@ Alternatively, you can clone the code repository for this service and use Docker
 
 This service exposes a single endpoint at port 4567 by default which responds to POST requests. The service expects a JSON payload of the event
 
-For example: http://localhost:4566/event
+For example: http://localhost:4567/event
 
