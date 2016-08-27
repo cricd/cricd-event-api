@@ -6,24 +6,27 @@ require 'time'
 require 'logger'
 require 'json-schema'
 require 'securerandom'
+require 'httparty'
 
 $logger = Logger.new(STDOUT)
 
 # Pull the settings from ENV variables
-settings = {
-  :ip => ENV["EVENTSTORE_IP"].nil? ? "localhost" : ENV["EVENTSTORE_IP"],
-  :port => ENV["EVENTSTORE_PORT"].nil? ? "2113" : ENV["EVENTSTORE_PORT"],
-  :stream_name => ENV["EVENTSTORE_STREAM_NAME"].nil? ? "cricket_events_v1" : ENV["EVENTSTORE_STREAM_NAME"]
+$settings = {
+  :event_store_ip => ENV["EVENTSTORE_IP"].nil? ? "localhost" : ENV["EVENTSTORE_IP"],
+  :event_store_port => ENV["EVENTSTORE_PORT"].nil? ? "2113" : ENV["EVENTSTORE_PORT"],
+  :stream_name => ENV["EVENTSTORE_STREAM_NAME"].nil? ? "cricket_events_v1" : ENV["EVENTSTORE_STREAM_NAME"],
+  :next_ball_ip => ENV["NEXT_BALL_IP"].nil? ? "localhost" : ENV["NEXT_BALL_IP"],
+  :next_ball_port => ENV["NEXT_BALL_PORT"].nil? ? "3004" : ENV["NEXT_BALL_PORT"]
 }
 
 
 # Set up ES
 $client = HttpEventstore::Connection.new do |config|
-  config.endpoint = settings[:ip]
-  config.port = settings[:port]
+  config.endpoint = $settings[:event_store_ip]
+  config.port = $settings[:event_store_port]
   config.page_size = '50'
 end
-  $stream_name = settings[:stream_name]
+  $stream_name = $settings[:stream_name]
 
 
 class App < Sinatra::Base
@@ -75,11 +78,29 @@ class App < Sinatra::Base
         $logger.error("Failed to push event to EventStore - #{e}")
         return
       end
-
-      status 201
-      body 'Event created'
       $logger.info("Successfully pushed to EventStore with UUID - #{event_data[:event_id]}")
-    end
+      
+      # Get the next event
+      match_id = event["match"].to_s
+      uri = "http://" + + $settings[:next_ball_ip] + ":" +  $settings[:next_ball_port]
+      response = HTTParty.get("#{uri}",
+                             :query => {'match' => match_id},
+                             :headers => { 'Content-Type' => 'application/json'},
+                             :timeout => 1)
+      case response.code
+        when 200
+          status 201
+          body response.body
+          $logger.info("Successfully returned next ball event")
+          return
+        else
+          status 201
+          body ""
+          $logger.info("Failed to return next ball event")
+          return nil
+        end
+      end
+
   end
 end
 App.run!
