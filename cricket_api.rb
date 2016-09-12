@@ -26,17 +26,17 @@ class CricketAPI < Sinatra::Base
       $logger.error("Failed to parse JSON #{e}")
       return
     end
-    
+
     # Do the JSON validation
     valid = Helpers.validate_JSON(schema, event) 
-    if !valid 
+    if !valid
       $logger.info("Received request with invalid JSON ")
       status 400
       body 'Invalid JSON sent'
       return
     end
-    
-      # Do something useful with the JSON
+
+    # Do something useful with the JSON
       $logger.info("Request has valid JSON")
       pushed_to_ES = Helpers.push_to_ES(event)
       if !pushed_to_ES
@@ -49,7 +49,7 @@ class CricketAPI < Sinatra::Base
       
       # Get the next event
       next_event = Helpers.get_next_match_event(event)
-      if next_event 
+      if next_event
           status 201
           body response.body
           $logger.info("Successfully returned next ball event")
@@ -58,5 +58,6 @@ class CricketAPI < Sinatra::Base
           body ""
           $logger.info("Failed to return next ball event")
       end
+  end
 end
 CricketAPI.run!

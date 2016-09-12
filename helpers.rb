@@ -23,7 +23,6 @@ module Helpers
     $stream_name = $settings[:stream_name]
     $logger = Logger.new(STDOUT)
 
-
     begin
         $schema = JSON.parse(File.read('event_schema.json'))
     rescue IOError => e
@@ -62,7 +61,6 @@ module Helpers
         return true
     end
 
-
     def self.get_next_match_event(event)
         match_id = event["match"].to_s
         uri = "http://" + + $settings[:next_ball_ip] + ":" +  $settings[:next_ball_port]
@@ -74,9 +72,7 @@ module Helpers
             when 200
                 return response.body
             else
-          return nil
+                return nil
+            end
         end
-
-    end
-
 end
