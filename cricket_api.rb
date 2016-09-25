@@ -28,7 +28,7 @@ class CricketAPI < Sinatra::Base
     end
 
     # Do the JSON validation
-    valid = Helpers.validate_JSON(schema, event) 
+    valid = Helpers.validate_JSON(event) 
     if !valid
       $logger.info("Received request with invalid JSON ")
       status 400

@@ -39,8 +39,8 @@ module Helpers
         return event
     end
 
-    def self.validate_JSON(schema, event)
-        valid = JSON::Validator.validate(schema, event)
+    def self.validate_JSON(event)
+        valid = JSON::Validator.validate($schema, event)
         if valid 
             return true
         else
