@@ -3,6 +3,8 @@ require 'json'
 require 'logger'
 require 'securerandom'
 require 'http_eventstore'
+require 'httparty'
+
 
 module Helpers
     # Pull the settings from ENV variables
