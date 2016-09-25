@@ -58,6 +58,7 @@ module Helpers
         rescue StandardError => e
             return false
         end
+        $logger.info("Successfully pushed to EventStore with UUID - #{event_data[:event_id]}")
         return true
     end
 

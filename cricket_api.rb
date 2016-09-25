@@ -45,7 +45,6 @@ class CricketAPI < Sinatra::Base
         body 'Internal server error'
         return
       end
-      $logger.info("Successfully pushed to EventStore with UUID - #{event_data[:event_id]}")
       
       # Get the next event
       next_event = Helpers.get_next_match_event(event)
