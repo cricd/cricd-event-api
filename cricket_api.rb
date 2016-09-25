@@ -40,7 +40,7 @@ class CricketAPI < Sinatra::Base
       $logger.info("Request has valid JSON")
       pushed_to_ES = Helpers.push_to_ES(event)
       if !pushed_to_ES
-        $logger.error("Failed to push event to EventStore - #{e}")
+        $logger.error("Failed to push event to EventStore")
         status 500
         body 'Internal server error'
         return
