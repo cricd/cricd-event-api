@@ -1,20 +1,11 @@
+FROM golang:latest 
+RUN mkdir /app 
+ADD . /app/ 
+WORKDIR /app 
+RUN go get github.com/Sirupsen/logrus
+RUN go get github.com/jetbasrawi/go.geteventstore
+RUN go get github.com/xeipuuv/gojsonschema
+RUN go get github.com/gorilla/mux
 
-FROM ruby:2.3
-MAINTAINER Ryan Scott <ryankennethscott@gmail.com>
-
-# throw errors if Gemfile has been modified since Gemfile.lock
-RUN bundle config --global frozen 1
-
-RUN mkdir /app
-WORKDIR /app
-COPY Gemfile /app/
-COPY Gemfile.lock /app/
-RUN bundle install
-
-COPY . /app
-
-EXPOSE 4567
-CMD ["ruby", "cricket_api.rb"]
-
-
-
+RUN go build -o event_api.go . 
+CMD ["/app/event_api"]
