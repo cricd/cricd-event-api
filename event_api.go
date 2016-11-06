@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,12 +9,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
-	es "github.com/jetbasrawi/go.geteventstore"
-	"github.com/xeipuuv/gojsonschema"
-
 	"github.com/gorilla/mux"
+	es "github.com/jetbasrawi/go.geteventstore"
+	"github.com/patrickmn/go-cache"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 type cricdConfig struct {
@@ -26,6 +28,7 @@ type cricdConfig struct {
 
 var config cricdConfig
 var client *es.Client
+var c = cache.New(5*time.Minute, 30*time.Second)
 
 func validateJSON(event string) bool {
 	//TODO: check if the file exists
@@ -104,6 +107,16 @@ func pushToES(config *cricdConfig, esClient *es.Client, event string) (string, e
 		log.WithFields(log.Fields{"value": event}).Error("Invalid JSON for event and cannot push to ES")
 		return "", errors.New("Unable to send to ES due to invalid JSON")
 	}
+
+	// Store cache
+	key := base64.StdEncoding.EncodeToString([]byte(event))
+	_, found := c.Get(key)
+	if found {
+		log.WithFields(log.Fields{"value": key}).Error("Event already received in the last 5 minutes")
+		return "", errors.New("Received this event in the last 5 minutes")
+	}
+	c.Set(key, &event, cache.DefaultExpiration)
+
 	uuid := es.NewUUID()
 	myESEvent := es.NewEvent(uuid, "cricket_event", event, nil)
 
@@ -177,19 +190,22 @@ func postEventHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "Unable to push event to ES")
+		return
 	}
 	if uuid == "" {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "Internal server error")
+		return
 	}
 
 	nextEvent, err := getNextEvent(&config, event)
 	if nextEvent != "" {
 		w.WriteHeader(201)
 		fmt.Fprintf(w, nextEvent)
+		return
 	}
 
 	w.WriteHeader(201)
-	log.WithFields(log.Fields{"value": string(event)}).Info("Successfully pushed event to ES with uuid:  %v", uuid)
-
+	log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
+	return
 }
