@@ -9,3 +9,5 @@ RUN go get github.com/gorilla/mux
 
 RUN go build -o event_api.go . 
 CMD ["/app/event_api"]
+
+EXPOSE 4567
