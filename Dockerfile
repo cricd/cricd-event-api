@@ -8,6 +8,6 @@ RUN go get github.com/xeipuuv/gojsonschema
 RUN go get github.com/gorilla/mux
 
 EXPOSE 4567
-RUN go build -o event_api.go . 
+RUN go build -o event_api . 
 CMD ["/app/event_api"]
 
