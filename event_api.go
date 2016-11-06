@@ -31,7 +31,6 @@ var client *es.Client
 var c = cache.New(5*time.Minute, 30*time.Second)
 
 func validateJSON(event string) bool {
-	//TODO: check if the file exists
 	s, err := ioutil.ReadFile("./event_schema.json")
 	if err != nil {
 		log.WithFields(log.Fields{"value": err}).Fatal("Unable to load json schema")
@@ -56,7 +55,7 @@ func mustGetConfig(config *cricdConfig) {
 	if esURL != "" {
 		config.eventStoreURL = esURL
 	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_IP"}).Info("Unable to find env var, using default")
+		log.WithFields(log.Fields{"value": "EVENTSTORE_IP"}).Info("Unable to find env var, using default `localhost`")
 		config.eventStoreURL = "localhost"
 	}
 
@@ -64,7 +63,7 @@ func mustGetConfig(config *cricdConfig) {
 	if esPort != "" {
 		config.eventStorePort = esPort
 	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_PORT"}).Info("Unable to find env var, using default")
+		log.WithFields(log.Fields{"value": "EVENTSTORE_PORT"}).Info("Unable to find env var, using default `2113`")
 		config.eventStorePort = "2113"
 	}
 
@@ -72,7 +71,7 @@ func mustGetConfig(config *cricdConfig) {
 	if esStreamName != "" {
 		config.eventStoreStreamName = esStreamName
 	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_STREAM_NAME"}).Info("Unable to find env var, using default")
+		log.WithFields(log.Fields{"value": "EVENTSTORE_STREAM_NAME"}).Info("Unable to find env var, using default `cricket_events_v1`")
 		config.eventStoreStreamName = "cricket_events_v1"
 	}
 
@@ -80,7 +79,7 @@ func mustGetConfig(config *cricdConfig) {
 	if nextBallURL != "" {
 		config.nextBallURL = nextBallURL
 	} else {
-		log.WithFields(log.Fields{"value": "NEXT_BALL_IP"}).Info("Unable to find env var, using default")
+		log.WithFields(log.Fields{"value": "NEXT_BALL_IP"}).Info("Unable to find env var, using default `localhost`")
 		config.nextBallURL = "localhost"
 	}
 
@@ -88,11 +87,12 @@ func mustGetConfig(config *cricdConfig) {
 	if nextBallPort != "" {
 		config.nextBallPort = nextBallPort
 	} else {
-		log.WithFields(log.Fields{"value": "NEXT_BALL_PORT"}).Info("Unable to find env var, using default")
+		log.WithFields(log.Fields{"value": "NEXT_BALL_PORT"}).Info("Unable to find env var, using default `3004`")
 		config.nextBallPort = "3004"
 	}
 }
 
+// TODO: Alter this to pass a point to the es.Client rather than return.
 func mustSetupES(config *cricdConfig) *es.Client {
 	client, err := es.NewClient(nil, "http://"+config.eventStoreURL+":"+config.eventStorePort)
 	if err != nil {
@@ -150,7 +150,6 @@ func getNextEvent(config *cricdConfig, event []byte) (string, error) {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to get match id")
 		return "", err
 	}
-
 	matchString := strconv.FormatFloat(match.(float64), 'E', -1, 64)
 
 	url := "http://" + config.nextBallURL + ":" + config.nextBallPort

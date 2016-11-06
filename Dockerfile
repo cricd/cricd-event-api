@@ -1,13 +1,7 @@
-FROM golang:latest 
-RUN mkdir /app 
-ADD . /app/ 
-WORKDIR /app 
-RUN go get github.com/Sirupsen/logrus
-RUN go get github.com/jetbasrawi/go.geteventstore
-RUN go get github.com/xeipuuv/gojsonschema
-RUN go get github.com/gorilla/mux
+FROM alpine:latest
+ADD event_api /event_api
+
 
 EXPOSE 4567
-RUN go build -o event_api . 
-CMD ["/app/event_api"]
+CMD ["/event_api"]
 
