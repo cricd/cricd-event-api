@@ -8,7 +8,7 @@ build: clean
 		GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 go build -o ${ARTIFACT} -a .
 
 clean:
-		rm -f ${ARTIFACT}
+		rm ${ARTIFACT}
 
 image: clean
 		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ${ARTIFACT} -a .

@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/base64"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -110,7 +111,8 @@ func pushToES(config *cricdConfig, esClient *es.Client, event string) (string, e
 	}
 
 	// Store cache
-	key := base64.StdEncoding.EncodeToString([]byte(event))
+	keyHex := md5.Sum([]byte(event))
+	key := hex.EncodeToString(keyHex[:])
 	_, found := c.Get(key)
 	if found {
 		log.WithFields(log.Fields{"value": key}).Error("Event already received in the last 5 minutes")
@@ -259,7 +261,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		uuid, err := pushToES(&config, client, string(event))
 		if err != nil {
 			w.WriteHeader(500)
-			fmt.Fprintf(w, "Unable to push event to ES")
+			fmt.Fprintf(w, "%v", err)
 			return
 		}
 		if uuid == "" {
@@ -268,7 +270,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		nextEvent, err := getNextEvent(&config, event)
+		nextEvent, _ := getNextEvent(&config, event)
 		if nextEvent != "" {
 			w.WriteHeader(201)
 			fmt.Fprintf(w, nextEvent)
