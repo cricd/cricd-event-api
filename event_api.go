@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -133,6 +134,44 @@ func pushToES(config *cricdConfig, esClient *es.Client, event string) (string, e
 
 }
 
+func readFromES(streamName string, esClient *es.Client) ([]interface{}, error) {
+	reader := client.NewStreamReader(streamName)
+	var allEvents []interface{}
+	for reader.Next() {
+		if reader.Err() != nil {
+			switch err := reader.Err().(type) {
+
+			case *url.Error, *es.ErrTemporarilyUnavailable:
+				log.WithFields(log.Fields{"value": err}).Error("Server temporarily unavailable, retrying in 30s")
+				<-time.After(time.Duration(30) * time.Second)
+
+			case *es.ErrNotFound:
+				log.WithFields(log.Fields{"value": err}).Error("Stream does not exist")
+				return nil, errors.New("Unable to read from stream that does not exist")
+
+			case *es.ErrUnauthorized:
+				log.WithFields(log.Fields{"value": err}).Error("Unauthorized request")
+				return nil, errors.New("Unauthorized to access ES")
+
+			case *es.ErrNoMoreEvents:
+				return allEvents, nil
+			default:
+				log.WithFields(log.Fields{"value": err}).Error("Unknown error occurred when reading from ES")
+				return nil, errors.New("Unknown error occurred when reading from ES")
+			}
+		}
+		var eventData interface{}
+		var eventMeta interface{}
+		err := reader.Scan(&eventData, &eventMeta)
+		if err != nil {
+			log.WithFields(log.Fields{"value": err}).Error("Unable to deserialize event")
+			return nil, errors.New("Unable to deserialize event from ES")
+		}
+		allEvents = append(allEvents, eventData)
+	}
+	return allEvents, nil
+}
+
 func getNextEvent(config *cricdConfig, event []byte) (string, error) {
 	// Get the match ID from the json event
 	var f interface{}
@@ -170,41 +209,74 @@ func main() {
 	mustGetConfig(&config)
 	client = mustSetupES(&config)
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/event", postEventHandler).Methods("POST")
+	router.HandleFunc("/event", eventHandler).Methods("POST", "GET")
 	http.ListenAndServe(":4567", router)
 
 }
 
-func postEventHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+func eventHandler(w http.ResponseWriter, r *http.Request) {
 
-	event, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(400)
-		fmt.Fprintf(w, "Unable to read event")
-		log.WithFields(log.Fields{"value": err}).Fatalf("Unable to read event %v", string(event))
-		return
-	}
-	uuid, err := pushToES(&config, client, string(event))
-	if err != nil {
-		w.WriteHeader(500)
-		fmt.Fprintf(w, "Unable to push event to ES")
-		return
-	}
-	if uuid == "" {
-		w.WriteHeader(500)
-		fmt.Fprintf(w, "Internal server error")
-		return
-	}
+	switch r.Method {
+	case "GET":
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		streamName := r.URL.Query().Get("match")
+		if streamName == "" {
+			w.WriteHeader(400)
+			fmt.Fprintf(w, "Requires a 'match' parameter")
+			log.Errorf("Request sent without a match parameter")
+			return
+		}
+		events, err := readFromES(streamName, client)
+		if err != nil {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "Internal server error")
+			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read from ES")
+			return
+		}
 
-	nextEvent, err := getNextEvent(&config, event)
-	if nextEvent != "" {
+		jsonEvents, err := json.Marshal(events)
+		if err != nil {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "Internal server error")
+			log.WithFields(log.Fields{"value": err}).Errorf("Unable to marshal JSON")
+			return
+		}
+		// TODO: GZIP?
+		w.WriteHeader(200)
+		fmt.Fprintf(w, string(jsonEvents))
+		return
+
+	case "POST":
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+		event, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(400)
+			fmt.Fprintf(w, "Unable to read event")
+			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
+			return
+		}
+		uuid, err := pushToES(&config, client, string(event))
+		if err != nil {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "Unable to push event to ES")
+			return
+		}
+		if uuid == "" {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "Internal server error")
+			return
+		}
+
+		nextEvent, err := getNextEvent(&config, event)
+		if nextEvent != "" {
+			w.WriteHeader(201)
+			fmt.Fprintf(w, nextEvent)
+			return
+		}
+
 		w.WriteHeader(201)
-		fmt.Fprintf(w, nextEvent)
+		log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
 		return
 	}
-
-	w.WriteHeader(201)
-	log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
-	return
 }
