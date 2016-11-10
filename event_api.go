@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -111,13 +111,14 @@ func pushToES(config *cricdConfig, esClient *es.Client, event string) (string, e
 	}
 
 	// Store cache
-	keyHex := md5.Sum([]byte(event))
-	key := hex.EncodeToString(keyHex[:])
+	keySHA := sha256.Sum256([]byte(event))
+	key := hex.EncodeToString(keySHA[:])
 	_, found := c.Get(key)
 	if found {
 		log.WithFields(log.Fields{"value": key}).Error("Event already received in the last 5 minutes")
 		return "", errors.New("Received this event in the last 5 minutes")
 	}
+	// In future we could just store nil here
 	c.Set(key, &event, cache.DefaultExpiration)
 
 	uuid := es.NewUUID()

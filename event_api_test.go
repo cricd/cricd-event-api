@@ -85,6 +85,23 @@ func TestPushToES(t *testing.T) {
 	}
 }
 
+func TestDuplicatesPushToES(t *testing.T) {
+	var testConfig cricdConfig
+	mustGetConfig(&testConfig)
+	testClient := mustSetupES(&testConfig)
+	test := pushToESTests[0]
+	s, err := ioutil.ReadFile(test.eventFile)
+	if err != nil {
+		panic(err)
+	}
+	// Going to push twice
+	_, _ = pushToES(&testConfig, testClient, string(s))
+	_, err = pushToES(&testConfig, testClient, string(s))
+	if err == nil {
+		t.Errorf("Expected to get error for duplicate event but didn't")
+	}
+}
+
 type getNextEventTest struct {
 	eventFile   string
 	expectEvent bool
