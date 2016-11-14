@@ -1,181 +1,48 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	es "github.com/cricd/es"
 	"github.com/gorilla/mux"
-	es "github.com/jetbasrawi/go.geteventstore"
 	"github.com/patrickmn/go-cache"
-	"github.com/xeipuuv/gojsonschema"
 )
 
-type cricdConfig struct {
-	eventStoreURL        string
-	eventStorePort       string
-	eventStoreStreamName string
-	nextBallURL          string
-	nextBallPort         string
+type cricdEventConfig struct {
+	nextBallURL  string
+	nextBallPort string
 }
 
-var config cricdConfig
-var client *es.Client
+var config cricdEventConfig
+var client es.CricdESClient
 var c = cache.New(5*time.Minute, 30*time.Second)
 
-func validateJSON(event string) bool {
-	s, err := ioutil.ReadFile("./event_schema.json")
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Fatal("Unable to load json schema")
-	}
-	schemaLoader := gojsonschema.NewBytesLoader(s)
-	documentLoader := gojsonschema.NewStringLoader(event)
-
-	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Fatal("Unable to validate json schema for event")
-	}
-
-	if result.Valid() {
-		return true
-	}
-	return false
-
-}
-
-func mustGetConfig(config *cricdConfig) {
-	esURL := os.Getenv("EVENTSTORE_IP")
-	if esURL != "" {
-		config.eventStoreURL = esURL
-	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_IP"}).Info("Unable to find env var, using default `localhost`")
-		config.eventStoreURL = "localhost"
-	}
-
-	esPort := os.Getenv("EVENTSTORE_PORT")
-	if esPort != "" {
-		config.eventStorePort = esPort
-	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_PORT"}).Info("Unable to find env var, using default `2113`")
-		config.eventStorePort = "2113"
-	}
-
-	esStreamName := os.Getenv("EVENTSTORE_STREAM_NAME")
-	if esStreamName != "" {
-		config.eventStoreStreamName = esStreamName
-	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_STREAM_NAME"}).Info("Unable to find env var, using default `cricket_events_v1`")
-		config.eventStoreStreamName = "cricket_events_v1"
-	}
-
-	nextBallURL := os.Getenv("NEXT_BALL_IP")
-	if nextBallURL != "" {
-		config.nextBallURL = nextBallURL
+func (config *cricdEventConfig) useDefault() {
+	nbURL := os.Getenv("NEXT_BALL_IP")
+	if nbURL != "" {
+		config.nextBallURL = nbURL
 	} else {
 		log.WithFields(log.Fields{"value": "NEXT_BALL_IP"}).Info("Unable to find env var, using default `localhost`")
 		config.nextBallURL = "localhost"
 	}
 
-	nextBallPort := os.Getenv("NEXT_BALL_PORT")
-	if nextBallPort != "" {
-		config.nextBallPort = nextBallPort
+	nbPort := os.Getenv("NEXT_BALL_PORT")
+	if nbPort != "" {
+		config.nextBallPort = nbPort
 	} else {
 		log.WithFields(log.Fields{"value": "NEXT_BALL_PORT"}).Info("Unable to find env var, using default `3004`")
 		config.nextBallPort = "3004"
 	}
 }
 
-// TODO: Alter this to pass a point to the es.Client rather than return.
-func mustSetupES(config *cricdConfig) *es.Client {
-	client, err := es.NewClient(nil, "http://"+config.eventStoreURL+":"+config.eventStorePort)
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Fatal("Unable to create ES connection")
-	}
-	return client
-}
-
-func pushToES(config *cricdConfig, esClient *es.Client, event string) (string, error) {
-	valid := validateJSON(event)
-	if !valid {
-		log.WithFields(log.Fields{"value": event}).Error("Invalid JSON for event and cannot push to ES")
-		return "", errors.New("Unable to send to ES due to invalid JSON")
-	}
-
-	// Store cache
-	keySHA := sha256.Sum256([]byte(event))
-	key := hex.EncodeToString(keySHA[:])
-	_, found := c.Get(key)
-	if found {
-		log.WithFields(log.Fields{"value": key}).Error("Event already received in the last 5 minutes")
-		return "", errors.New("Received this event in the last 5 minutes")
-	}
-	// In future we could just store nil here
-	c.Set(key, &event, cache.DefaultExpiration)
-
-	uuid := es.NewUUID()
-	myESEvent := es.NewEvent(uuid, "cricket_event", event, nil)
-
-	// Create a new StreamWriter
-	writer := esClient.NewStreamWriter(config.eventStoreStreamName)
-	err := writer.Append(nil, myESEvent)
-	if err != nil {
-		// Handle errors
-		log.WithFields(log.Fields{"value": err}).Error("Unable to push event to ES")
-		return "", err
-	}
-
-	return uuid, nil
-
-}
-
-func readFromES(streamName string, esClient *es.Client) ([]interface{}, error) {
-	reader := client.NewStreamReader(streamName)
-	var allEvents []interface{}
-	for reader.Next() {
-		if reader.Err() != nil {
-			switch err := reader.Err().(type) {
-
-			case *url.Error, *es.ErrTemporarilyUnavailable:
-				log.WithFields(log.Fields{"value": err}).Error("Server temporarily unavailable, retrying in 30s")
-				<-time.After(time.Duration(30) * time.Second)
-
-			case *es.ErrNotFound:
-				log.WithFields(log.Fields{"value": err}).Error("Stream does not exist")
-				return nil, errors.New("Unable to read from stream that does not exist")
-
-			case *es.ErrUnauthorized:
-				log.WithFields(log.Fields{"value": err}).Error("Unauthorized request")
-				return nil, errors.New("Unauthorized to access ES")
-
-			case *es.ErrNoMoreEvents:
-				return allEvents, nil
-			default:
-				log.WithFields(log.Fields{"value": err}).Error("Unknown error occurred when reading from ES")
-				return nil, errors.New("Unknown error occurred when reading from ES")
-			}
-		}
-		var eventData interface{}
-		var eventMeta interface{}
-		err := reader.Scan(&eventData, &eventMeta)
-		if err != nil {
-			log.WithFields(log.Fields{"value": err}).Error("Unable to deserialize event")
-			return nil, errors.New("Unable to deserialize event from ES")
-		}
-		allEvents = append(allEvents, eventData)
-	}
-	return allEvents, nil
-}
-
-func getNextEvent(config *cricdConfig, event []byte) (string, error) {
+func getNextEvent(config *cricdEventConfig, event []byte) (string, error) {
 	// Get the match ID from the json event
 	var f interface{}
 	err := json.Unmarshal(event, &f)
@@ -209,8 +76,12 @@ func getNextEvent(config *cricdConfig, event []byte) (string, error) {
 }
 
 func main() {
-	mustGetConfig(&config)
-	client = mustSetupES(&config)
+	config.useDefault()
+	client.UseDefaultConfig()
+	ok := client.Connect()
+	if !ok {
+		log.Panicln("Unable to connect to EventStore")
+	}
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/event", eventHandler).Methods("POST", "GET")
 	http.ListenAndServe(":4567", router)
@@ -229,7 +100,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("Request sent without a match parameter")
 			return
 		}
-		events, err := readFromES(streamName, client)
+		events, err := client.ReadStream(streamName)
 		if err != nil {
 			w.WriteHeader(500)
 			fmt.Fprintf(w, "Internal server error")
@@ -259,7 +130,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
 			return
 		}
-		uuid, err := pushToES(&config, client, string(event))
+		uuid, err := client.PushEvent(string(event))
 		if err != nil {
 			w.WriteHeader(500)
 			fmt.Fprintf(w, "%v", err)
