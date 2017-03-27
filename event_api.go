@@ -40,6 +40,7 @@ func (config *cricdEventConfig) useDefault() {
 }
 
 func getNextEvent(config *cricdEventConfig, event []byte) (string, error) {
+	log.Info("Trying to get next event")
 	// Get the match ID from the json event
 	var f interface{}
 	err := json.Unmarshal(event, &f)
@@ -47,7 +48,7 @@ func getNextEvent(config *cricdEventConfig, event []byte) (string, error) {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to unmarshall event %v", event)
 	}
 	if f == nil {
-		log.WithFields(log.Fields{"value": err}).Errorf("Unable to get match id")
+		log.WithFields(log.Fields{"value": err}).Errorf("Unmarshalled next event to empty interface")
 		return "", err
 	}
 	m := f.(map[string]interface{})

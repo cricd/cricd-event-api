@@ -44,6 +44,7 @@ var pushToESTests = []pushToESTest{
 func TestDuplicatesPushToES(t *testing.T) {
 	var testConfig cricdEventConfig
 	var testClient es.CricdESClient
+	testClient.UseDefaultConfig()
 	testConfig.useDefault()
 	testClient.Connect()
 	test := pushToESTests[0]
