@@ -7,12 +7,10 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	es "github.com/cricd/es"
 	"github.com/gorilla/mux"
-	"github.com/patrickmn/go-cache"
 )
 
 type cricdEventConfig struct {
@@ -22,7 +20,6 @@ type cricdEventConfig struct {
 
 var config cricdEventConfig
 var client es.CricdESClient
-var c = cache.New(5*time.Minute, 30*time.Second)
 
 func (config *cricdEventConfig) useDefault() {
 	nbURL := os.Getenv("NEXT_BALL_IP")
@@ -83,74 +80,42 @@ func main() {
 		log.Panicln("Unable to connect to EventStore")
 	}
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/event", eventHandler).Methods("POST", "GET")
+	router.HandleFunc("/event", eventHandler).Methods("POST")
 	http.ListenAndServe(":4567", router)
 
 }
 
 func eventHandler(w http.ResponseWriter, r *http.Request) {
 
-	switch r.Method {
-	case "GET":
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		streamName := r.URL.Query().Get("match")
-		if streamName == "" {
-			w.WriteHeader(400)
-			fmt.Fprintf(w, "Requires a 'match' parameter")
-			log.Errorf("Request sent without a match parameter")
-			return
-		}
-		events, err := client.ReadStream(streamName)
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintf(w, "Internal server error")
-			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read from ES")
-			return
-		}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
-		jsonEvents, err := json.Marshal(events)
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintf(w, "Internal server error")
-			log.WithFields(log.Fields{"value": err}).Errorf("Unable to marshal JSON")
-			return
-		}
-		// TODO: GZIP?
-		w.WriteHeader(200)
-		fmt.Fprintf(w, string(jsonEvents))
-		return
-
-	case "POST":
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-
-		event, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(400)
-			fmt.Fprintf(w, "Unable to read event")
-			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
-			return
-		}
-		uuid, err := client.PushEvent(string(event))
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintf(w, "%v", err)
-			return
-		}
-		if uuid == "" {
-			w.WriteHeader(500)
-			fmt.Fprintf(w, "Internal server error")
-			return
-		}
-
-		nextEvent, _ := getNextEvent(&config, event)
-		if nextEvent != "" {
-			w.WriteHeader(201)
-			fmt.Fprintf(w, nextEvent)
-			return
-		}
-
-		w.WriteHeader(201)
-		log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
+	event, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(400)
+		fmt.Fprintf(w, "Unable to read event")
+		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
 		return
 	}
+	uuid, err := client.PushEvent(string(event))
+	if err != nil {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "%v", err)
+		return
+	}
+	if uuid == "" {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "Internal server error")
+		return
+	}
+
+	nextEvent, _ := getNextEvent(&config, event)
+	if nextEvent != "" {
+		w.WriteHeader(201)
+		fmt.Fprintf(w, nextEvent)
+		return
+	}
+
+	w.WriteHeader(201)
+	log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
+	return
 }
