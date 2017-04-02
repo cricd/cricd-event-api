@@ -98,7 +98,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid, err := client.PushEvent(string(event), dedupe)
+	uuid, err := client.PushEvent(string(event), true)
 	if err != nil {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "%v", err)
