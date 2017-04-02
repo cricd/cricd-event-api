@@ -114,8 +114,11 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	useCache := r.Header.Get("Cache")
-	if useCache == "true" {
+	ne, err := strconv.ParseBool(r.Header.Get("NextEvent"))
+	if err != nil {
+		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using nextEvent parameter")
+	}
+	if ne {
 		nextEvent, _ := getNextEvent(&config, event)
 		if nextEvent != "" {
 			w.WriteHeader(201)
