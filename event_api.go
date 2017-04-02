@@ -98,13 +98,6 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	values := r.URL.Query()
-
-	dedupe, err := strconv.ParseBool(values.Get("Dedupe"))
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using dedupe parameter")
-	}
-
 	uuid, err := client.PushEvent(string(event), dedupe)
 	if err != nil {
 		w.WriteHeader(500)
@@ -117,18 +110,11 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ne, err := strconv.ParseBool(values.Get("NextEvent"))
-	fmt.Println()
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using nextEvent parameter")
-	}
-	if ne {
-		nextEvent, _ := getNextEvent(&config, event)
-		if nextEvent != "" {
-			w.WriteHeader(201)
-			fmt.Fprintf(w, nextEvent)
-			return
-		}
+	nextEvent, _ := getNextEvent(&config, event)
+	if nextEvent != "" {
+		w.WriteHeader(201)
+		fmt.Fprintf(w, nextEvent)
+		return
 	}
 
 	w.WriteHeader(201)
