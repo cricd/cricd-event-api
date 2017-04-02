@@ -97,7 +97,10 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
 		return
 	}
-	dedupe, err := strconv.ParseBool(r.Header.Get("Dedupe"))
+
+	values := r.URL.Query()
+
+	dedupe, err := strconv.ParseBool(values.Get("Dedupe"))
 	if err != nil {
 		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using dedupe parameter")
 	}
@@ -114,7 +117,8 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ne, err := strconv.ParseBool(r.Header.Get("NextEvent"))
+	ne, err := strconv.ParseBool(values.Get("NextEvent"))
+	fmt.Println()
 	if err != nil {
 		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using nextEvent parameter")
 	}
