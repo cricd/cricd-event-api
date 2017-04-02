@@ -53,8 +53,8 @@ func TestDuplicatesPushToES(t *testing.T) {
 		panic(err)
 	}
 	// Going to push twice
-	_, _ = testClient.PushEvent(string(s))
-	_, err = testClient.PushEvent(string(s))
+	_, _ = testClient.PushEvent(string(s), true)
+	_, err = testClient.PushEvent(string(s), true)
 	if err == nil {
 		t.Errorf("Expected to get error for duplicate event but didn't")
 	}

@@ -97,7 +97,12 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
 		return
 	}
-	uuid, err := client.PushEvent(string(event))
+	dedupe, err := strconv.ParseBool(r.Header.Get("Dedupe"))
+	if err != nil {
+		log.WithFields(log.Fields{"value": err}).Error("Unable to parse using dedupe parameter")
+	}
+
+	uuid, err := client.PushEvent(string(event), dedupe)
 	if err != nil {
 		w.WriteHeader(500)
 		fmt.Fprintf(w, "%v", err)
@@ -109,11 +114,14 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nextEvent, _ := getNextEvent(&config, event)
-	if nextEvent != "" {
-		w.WriteHeader(201)
-		fmt.Fprintf(w, nextEvent)
-		return
+	useCache := r.Header.Get("Cache")
+	if useCache == "true" {
+		nextEvent, _ := getNextEvent(&config, event)
+		if nextEvent != "" {
+			w.WriteHeader(201)
+			fmt.Fprintf(w, nextEvent)
+			return
+		}
 	}
 
 	w.WriteHeader(201)
