@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	cricd "github.com/cricd/cricd-go"
 	es "github.com/cricd/es"
 )
 
@@ -52,9 +54,12 @@ func TestDuplicatesPushToES(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+
+	var d cricd.Delivery
+	err = json.Unmarshal(s, &d)
 	// Going to push twice
-	_, _ = testClient.PushEvent(string(s), true)
-	_, err = testClient.PushEvent(string(s), true)
+	_, _ = testClient.PushEvent(d, true)
+	_, err = testClient.PushEvent(d, true)
 	if err == nil {
 		t.Errorf("Expected to get error for duplicate event but didn't")
 	}

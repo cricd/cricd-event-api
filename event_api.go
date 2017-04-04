@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 
+	cricd "github.com/cricd/cricd-go"
+
 	log "github.com/Sirupsen/logrus"
 	es "github.com/cricd/es"
 	"github.com/gorilla/mux"
@@ -94,18 +96,28 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(400)
 		fmt.Fprintf(w, "Unable to read event")
-		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event")
+		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event from request")
+		return
+	}
+	var cd cricd.Delivery
+	err = json.Unmarshal(event, &cd)
+	if err != nil {
+		w.WriteHeader(500)
+		log.WithFields(log.Fields{"value": err}).Errorf("Failed to unmarshal event to a cricd Delivery")
+		fmt.Fprintf(w, "Failed to unmarshal event %v", err)
 		return
 	}
 
-	uuid, err := client.PushEvent(string(event), true)
+	uuid, err := client.PushEvent(cd, true)
 	if err != nil {
 		w.WriteHeader(500)
-		fmt.Fprintf(w, "%v", err)
+		log.WithFields(log.Fields{"value": err}).Errorf("Failed to push event to ES")
+		fmt.Fprintf(w, "Failed to push event %v", err)
 		return
 	}
 	if uuid == "" {
 		w.WriteHeader(500)
+		log.Errorf("Failed to push event without error")
 		fmt.Fprintf(w, "Internal server error")
 		return
 	}
