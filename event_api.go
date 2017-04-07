@@ -23,6 +23,11 @@ type cricdEventConfig struct {
 var config cricdEventConfig
 var client es.CricdESClient
 
+func init() {
+	log.SetLevel(log.InfoLevel)
+	log.SetOutput(os.Stdout)
+}
+
 func (config *cricdEventConfig) useDefault() {
 	nbURL := os.Getenv("NEXT_BALL_IP")
 	if nbURL != "" {
@@ -122,13 +127,17 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nextEvent, _ := getNextEvent(&config, event)
-	if nextEvent != "" {
-		w.WriteHeader(201)
-		fmt.Fprintf(w, nextEvent)
-		return
-	}
+	params := r.URL.Query()
 
+	if params.Get("NextEvent") != "false" {
+		nextEvent, _ := getNextEvent(&config, event)
+		if nextEvent != "" {
+			w.WriteHeader(201)
+			fmt.Fprintf(w, nextEvent)
+			return
+		}
+
+	}
 	w.WriteHeader(201)
 	log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
 	return
