@@ -128,8 +128,8 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := r.URL.Query()
-
-	if params.Get("NextEvent") != "false" {
+	if params.Get("nextEvent") != "false" {
+		log.Info("Getting next event for game")
 		nextEvent, _ := getNextEvent(&config, event)
 		if nextEvent != "" {
 			w.WriteHeader(201)
