@@ -113,7 +113,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid, err := client.PushEvent(cd, true)
+	uuid, err := client.PushEvent(cd, false)
 	if err != nil {
 		w.WriteHeader(500)
 		log.WithFields(log.Fields{"value": err}).Errorf("Failed to push event to ES")
@@ -123,7 +123,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	if uuid == "" {
 		w.WriteHeader(500)
 		log.Errorf("Failed to push event without error")
-		fmt.Fprintf(w, "Internal server error")
+		fmt.Fprintf(w, "Internal server error foo")
 		return
 	}
 
