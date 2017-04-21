@@ -100,7 +100,7 @@
           "description": "An identifier for which innings in a match this event relates to",
           "id": "http://ryankscott.com/ball/innings",
           "minimum": 1,
-          "maximum": 2
+          "maximum": 4
         },
         "over": {
           "type": "integer",
@@ -114,6 +114,7 @@
           "title": "Ball schema.",
           "description": "The ball in the over which this match event belongs to.",
             "minimum": 0,
+            "maximum": 6,
             "id": "http://ryankscott.com/ball/ball"
         }
       },
