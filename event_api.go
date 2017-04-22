@@ -117,13 +117,13 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	ok, err := cd.Validate()
 	if err != nil {
 		w.WriteHeader(400)
-		log.Errorf("Failed to validate event without error")
+		log.WithFields(log.Fields{"value": err}).Errorf("Failed to validate delivery with error")
 		fmt.Fprintf(w, "Invalid event passed - %s", err)
 		return
 
 	} else if !ok {
 		w.WriteHeader(400)
-		log.WithFields(log.Fields{"value": err}).Errorf("Failed to validate delivery")
+		log.Error("Failed to validate delivery without error")
 		fmt.Fprintf(w, "Invalid delivery received")
 		return
 	}
