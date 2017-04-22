@@ -138,7 +138,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 	if uuid == "" {
 		w.WriteHeader(500)
 		log.Errorf("Failed to push event without error")
-		fmt.Fprintf(w, "Internal server error foo")
+		fmt.Fprintf(w, "Internal server error")
 		return
 	}
 
