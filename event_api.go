@@ -88,7 +88,7 @@ func main() {
 		log.Panicln("Unable to connect to EventStore")
 	}
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/event", eventHandler).Methods("POST")
+	router.HandleFunc("/event", eventHandler)
 	http.ListenAndServe(":4567", router)
 
 }
@@ -96,67 +96,76 @@ func main() {
 func eventHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
 		"Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
 
-	event, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(400)
-		fmt.Fprintf(w, "Unable to read event")
-		log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event from request")
+	switch r.Method {
+	case "OPTIONS":
+		w.WriteHeader(200)
 		return
-	}
-	var cd cricd.Delivery
-	err = json.Unmarshal(event, &cd)
-	if err != nil {
-		w.WriteHeader(500)
-		log.WithFields(log.Fields{"value": err}).Errorf("Failed to unmarshal event to a cricd Delivery")
-		fmt.Fprintf(w, "Failed to unmarshal event %v", err)
-		return
-	}
-
-	// Validate the delivery
-	ok, err := cd.Validate()
-	if err != nil {
-		w.WriteHeader(400)
-		log.WithFields(log.Fields{"value": err}).Errorf("Failed to validate delivery with error")
-		fmt.Fprintf(w, "Invalid event passed - %s", err)
-		return
-
-	} else if !ok {
-		w.WriteHeader(400)
-		log.Error("Failed to validate delivery without error")
-		fmt.Fprintf(w, "Invalid delivery received")
-		return
-	}
-
-	uuid, err := client.PushEvent(cd, false)
-	if err != nil {
-		w.WriteHeader(500)
-		log.WithFields(log.Fields{"value": err}).Errorf("Failed to push event to ES")
-		fmt.Fprintf(w, "Failed to push event %v", err)
-		return
-	}
-	if uuid == "" {
-		w.WriteHeader(500)
-		log.Errorf("Failed to push event without error")
-		fmt.Fprintf(w, "Internal server error")
-		return
-	}
-
-	params := r.URL.Query()
-	if params.Get("nextEvent") != "false" {
-		log.Info("Getting next event for game")
-		nextEvent, _ := getNextEvent(&config, event)
-		if nextEvent != "" {
-			w.WriteHeader(201)
-			fmt.Fprintf(w, nextEvent)
+	case "POST":
+		event, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(400)
+			fmt.Fprintf(w, "Unable to read event")
+			log.WithFields(log.Fields{"value": err}).Errorf("Unable to read event from request")
+			return
+		}
+		var cd cricd.Delivery
+		err = json.Unmarshal(event, &cd)
+		if err != nil {
+			w.WriteHeader(500)
+			log.WithFields(log.Fields{"value": err}).Errorf("Failed to unmarshal event to a cricd Delivery")
+			fmt.Fprintf(w, "Failed to unmarshal event %v", err)
 			return
 		}
 
+		// Validate the delivery
+		ok, err := cd.Validate()
+		if err != nil {
+			w.WriteHeader(400)
+			log.WithFields(log.Fields{"value": err}).Errorf("Failed to validate delivery with error")
+			fmt.Fprintf(w, "Invalid event passed - %s", err)
+			return
+
+		} else if !ok {
+			w.WriteHeader(400)
+			log.Error("Failed to validate delivery without error")
+			fmt.Fprintf(w, "Invalid delivery received")
+			return
+		}
+
+		uuid, err := client.PushEvent(cd, false)
+		if err != nil {
+			w.WriteHeader(500)
+			log.WithFields(log.Fields{"value": err}).Errorf("Failed to push event to ES")
+			fmt.Fprintf(w, "Failed to push event %v", err)
+			return
+		}
+		if uuid == "" {
+			w.WriteHeader(500)
+			log.Errorf("Failed to push event without error")
+			fmt.Fprintf(w, "Internal server error")
+			return
+		}
+
+		params := r.URL.Query()
+		if params.Get("nextEvent") != "false" {
+			log.Info("Getting next event for game")
+			nextEvent, _ := getNextEvent(&config, event)
+			if nextEvent != "" {
+				w.WriteHeader(201)
+				fmt.Fprintf(w, nextEvent)
+				return
+			}
+
+		}
+		w.WriteHeader(201)
+		log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
+		return
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
-	w.WriteHeader(201)
-	log.WithFields(log.Fields{"value": uuid}).Info("Successfully pushed event to ES")
-	return
 }
