@@ -46,29 +46,10 @@ func (config *cricdEventConfig) useDefault() {
 	}
 }
 
-func getNextEvent(config *cricdEventConfig, event []byte) (string, error) {
-	log.Info("Trying to get next event")
-	// Get the match ID from the json event
-	var f interface{}
-	err := json.Unmarshal(event, &f)
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Errorf("Unable to unmarshall event %v", event)
-		return "", err
-	}
-	if f == nil {
-		log.WithFields(log.Fields{"value": err}).Errorf("Unmarshalled next event to empty interface")
-		return "", err
-	}
-	m := f.(map[string]interface{})
-	match := m["match"]
-	if match == nil {
-		log.WithFields(log.Fields{"value": err}).Errorf("Unable to get match id")
-		return "", err
-	}
-	matchString := strconv.FormatFloat(match.(float64), 'E', -1, 64)
+func getNextEvent(config *cricdEventConfig, event cricd.Delivery) (string, error) {
 
 	url := "http://" + config.nextBallURL + ":" + config.nextBallPort
-	resp, err := http.Get(url + "?match=" + matchString)
+	resp, err := http.Get(url + "?match=" + strconv.Itoa(event.MatchID))
 	if err != nil {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to get next event")
 		return "", err
@@ -154,7 +135,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
 		if params.Get("nextEvent") != "false" {
 			log.Info("Getting next event for game")
-			nextEvent, err := getNextEvent(&config, event)
+			nextEvent, err := getNextEvent(&config, cd)
 			if err != nil {
 				w.WriteHeader(500)
 				log.Errorf("Error when getting next event - %v", err)
