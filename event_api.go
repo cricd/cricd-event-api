@@ -53,6 +53,7 @@ func getNextEvent(config *cricdEventConfig, event []byte) (string, error) {
 	err := json.Unmarshal(event, &f)
 	if err != nil {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unable to unmarshall event %v", event)
+		return "", err
 	}
 	if f == nil {
 		log.WithFields(log.Fields{"value": err}).Errorf("Unmarshalled next event to empty interface")
@@ -153,7 +154,13 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
 		if params.Get("nextEvent") != "false" {
 			log.Info("Getting next event for game")
-			nextEvent, _ := getNextEvent(&config, event)
+			nextEvent, err := getNextEvent(&config, event)
+			if err != nil {
+				w.WriteHeader(500)
+				log.Errorf("Error when getting next event - %v", err)
+				fmt.Fprintf(w, "Error from next ball processor - %v", err)
+				return
+			}
 			if nextEvent != "" {
 				w.WriteHeader(201)
 				fmt.Fprintf(w, nextEvent)
